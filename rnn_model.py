@@ -17,25 +17,30 @@ class RNNModel():
 
   def init_params(self):
     initializer = tf.random_uniform_initializer(-1,1)
+
+    self.learning_rate = 0.01
+
     self.W_hh = tf.get_variable("W_hh", shape=[self.h,self.h],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
-    self.W_ih = tf.get_variable("W_ih", shape=[self.h, self.n],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.n), 0, 1.0, tf.float64)
-    self.b_h  = tf.get_variable("b_h", shape=[self.h, self.h],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
-    self.x_t  = tf.placeholder(name="x_t" , shape=(self.n,self.h),dtype=tf.float32)
-    self.h_prev=tf.get_variable("h_prev", shape=[self.h,self.h],initializer=initializer,dtype=tf.float32) #= tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
-    self.h_t  = tf.get_variable("h_t", shape=[self.h,self.h],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
+    self.W_ih = tf.get_variable("W_ih", shape=[self.h, self.h],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.n), 0, 1.0, tf.float64)
+    self.b_h  = tf.get_variable("b_h", shape=[self.n, self.1],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
+    #self.x_t  = tf.placeholder(name="x_t" , shape=(self.n,self.h),dtype=tf.float32)
+    self.h_prev=tf.get_variable("h_prev", shape=[self.n,self.h],initializer=initializer,dtype=tf.float32) #= tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
+    self.h_t  = tf.get_variable("h_t", shape=[self.n,self.h],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
     self.W_ho = tf.get_variable("W_ho", shape=[self.h,self.h],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
-    self.b_o  = tf.get_variable("b_o", shape=[self.h,self.h],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
-    self.z_t  = tf.nn.softmax(tf.matmul(self.W_ho, self.h_t) + self.b_o)
-    self.loss= 0.0
-    self.nll = self.loss_fn(self.z_t)
+    self.b_o  = tf.get_variable("b_o", shape=[self.n, 1],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
+    self.z_t  = tf.get_variable("z_t", shape=[self.n, self.h], dtype=tf.float32) #tf.nn.softmax(tf.matmul(self.W_ho, self.h_t) + self.b_o)
+    self.loss = tf.get_variable("loss",shape=[1], dtype=tf.float32) 
     self.layers_h = []
     self.layers_z = []
+    self.W_pred = tf.get_variable("W_pred",shape=[self.h, 1],initializer=initializer,dtype=tf.float32) # linear layer
+    self.b_pred = tf.get_variable("b_pred",shape=[self.n, 1],initializer=initializer,dtype=tf.float32)
 
-  def RU(self):
+  def RU(self, time_step):
     """
     Returns h_t
     """
-    return tf.tanh( tf.matmul(self.W_hh, self.h_prev) + tf.matmul(self.W_ih, self.x_t) + self.b_h )
+    b_h_tiled = tf.convert_to_tensor( np.tile(self.b_h, self.h), dtype=tf.float32 )
+    return tf.tanh( tf.matmul(self.h_prev, self.W_hh) + tf.matmul(time_step, self.W_ih) + b_h_tiled )
 
   def loss_fn(self, prediction):
     """
@@ -45,32 +50,39 @@ class RNNModel():
     return tf.matmul( tmp_labels, tf.log(prediction) )
 
 
-  def fwd_prop(self, sess):
+  def fwd_prop(self):
     """
     Perform forward propapagation as follows:
     for each time step:
     1) Calculate h_t = tanh(W_hh * h_prev + W_ih * x_t + b_h)
     2) Calculate z_t = softmax(W_ho * h_t + b_o)
-    3) Calculate loss
-    4) Calculate cummulative loss = \sum_t loss_fn()
+#    3) Calculate loss
+#    4) Calculate cummulative loss = \sum_t loss_fn()
     """
     print("fwd...")
-
+    self.loss = 0.0
+    del self.layers_h[:]
+    del self.layers_z[:]
     for i in range(self.t):
-      time_step = self.data[:,i,:] # n x h
-      self.h_prev = self.h_t # h x h
-      self.h_t = self.RU() # h x h 
-      sess.run(self.h_t, feed_dict={self.x_t:time_step})
+      time_step = tf.convert_to_tensor(self.data[:,i,:], dtype=tf.float32) # n x h
+      self.h_prev = self.h_t # n x h
+      self.h_t = self.RU(time_step) # n x h 
       self.layers_h.append(self.h_t)
       
-      sess.run(self.z_t)
-      l = self.nll
-      sess.run(l)
-      self.loss += l
+      self.z_t = tf.nn.softmax(tf.matmul(self.h_t, self.W_ho) + tf.convert_to_tensor( np.tile(self.b_o, self.h), dtype=tf.float32 ) ) # n x h
       self.layers_z.append(self.z_t)
 
-    self.loss = self.loss * -1
-    print("loss={}".format(self.loss))
+      #self.loss += self.loss_fn(self.z_t)
+
+    z_t_max = self.z_t
+    preds = tf.nn.softmax( tf.matmul(z_t_max, self.W_pred) + self.b_pred )
+
+    print("calculating loss...")
+    self.loss = tf.losses.softmax_cross_entropy(self.labels, preds, reduction=Reduction.SUM)
+
+
+    #self.loss = self.loss * -1
+    return self.loss
 
   # BPTT
   def bptt(self):
@@ -78,10 +90,7 @@ class RNNModel():
     section 3.0: https://arxiv.org/pdf/1610.02583.pdf
     """
     print("running bptt...")
-    ##
-    loss_tiled = tf.convert_to_tensor( np.tile(self.loss, [self.h, self.h]) )
     alpha = 10**-4
-	
 	
     #Calculate:
     #1) \frac{\partial{Loss}}{dW_{ho}}
@@ -91,9 +100,9 @@ class RNNModel():
     dLdW_ho = 0.0
     dLdB_o = 0.0
     for i in range(self.t):
-      dLdZ_t = tf.gradients(self.nll, self.layers_z[i])
-      dZdW_ho = tf.gradients(self.layers_z[i], self.W_ho)
-      dZdB_o = tf.gradients(self.layers_z[i], self.b_o)
+      dLdZ_t = tf.gradients(self.loss, self.layers_z[i])[0] # https://stackoverflow.com/a/38033731/1174594
+      dZdW_ho = tf.gradients(self.layers_z[i], self.W_ho)[0]
+      dZdB_o = tf.gradients(self.layers_z[i], self.b_o)[0]
       dLdW_ho += ( dLdZ_t * dZdW_ho )
       dLdB_o  += ( dLdZ_t * dZdB_o )
     self.W_ho -= alpha * dLdW_ho #tf.gradients(self.nll, self.W_ho)[0] # https://stackoverflow.com/a/38033731/1174594
@@ -113,11 +122,11 @@ class RNNModel():
       dL_jdW_hh = 0.0
       dL_jdW_ih = 0.0
 	
-      dL_jdZ_j = tf.gradients(self.nll, self.layers_z[j])
-      dZ_jdH_j = tf.gradients(self.nll, self.layers_h[j])
+      dL_jdZ_j = tf.gradients(self.loss, self.layers_z[j])[0]
+      dZ_jdH_j = tf.gradients(self.loss, self.layers_h[j])[0]
       for k in range(j-1, 0, -1):
-        dH_jdH_k = tf.gradients(self.layers_h[j], self.layers_h[k])
-        dH_kdW_hh= tf.gradients(self.layers_h[k], self.W_hh)
+        dH_jdH_k = tf.gradients(self.layers_h[j], self.layers_h[k])[0]
+        dH_kdW_hh= tf.gradients(self.layers_h[k], self.W_hh)[0]
         dL_jdW_hh += ( dL_jdZ_j * dZ_jdH_j * dH_jdH_k * dH_kdW_hh )
         dL_jdW_ih += ( dL_jdZ_j * dZ_jdH_j * dH_jdH_k * dH_kdW_ih )
       dLdW_hh += dL_jdW_hh
@@ -132,9 +141,10 @@ class RNNModel():
     with tf.Session() as sess:
       sess.run(init_op)
       with tf.name_scope('Training'):
-        self.fwd_prop(sess)
+        sess.run(self.fwd_prop())
+        print("fwd done")
         saved_at = saver.save(sess, "/tmp/arsany/fwd.ckpt")
-        print("fwd done, saved checkpoint at {}".format(saved_at))
+        print("saved checkpoint at {}".format(saved_at))
         sess.run(self.bptt())
         saved_at = saver.save(sess, "/tmp/arsany/model.ckpt")
         print("bptt done, model saved at{}".format(saved_at))
