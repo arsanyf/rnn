@@ -13,39 +13,44 @@ class RNNModel():
     self.data = data
 #    self.labels = labels
 
-    self.init_params()
+    self.init_params(labels)
 
-  def init_params(self):
-    initializer = tf.random_uniform_initializer(-1,1)
+  def init_params(self, labels):
+    with tf.variable_scope("model"):
+      initializer = tf.random_uniform_initializer(-1,1)
+      self.initializer = initializer
 
-    #self.learning_rate = 0.01
+      self.W_hh = tf.get_variable("W_hh", shape=[self.h,self.h],initializer=initializer,dtype=tf.float32)
+      self.W_ih = tf.get_variable("W_ih", shape=[self.h, self.h],initializer=initializer,dtype=tf.float32)
+      #self.b_h  = tf.get_variable("b_h", shape=[self.n, 1],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
+      #self.b_h_tiled = tf.convert_to_tensor( np.tile(self.b_h.eval(), self.h), dtype=tf.float32 )
+      #self.x_t  = tf.placeholder(name="x_t" , shape=(self.n,self.h),dtype=tf.float32)
+      
+      #self.h_prev=tf.get_variable("h_prev", shape=[self.n,self.h],initializer=initializer,dtype=tf.float32)
+      #self.h_t  = tf.get_variable("h_t", shape=[self.n,self.h],initializer=initializer,dtype=tf.float32)
+      self.W_ho = tf.get_variable("W_ho", shape=[self.h,self.h],initializer=initializer,dtype=tf.float32)
+      self.b_o  = tf.get_variable("b_o", shape=[self.n,1],initializer=initializer,dtype=tf.float32) 
+      self.z_t_max = tf.get_variable("z_t_max", shape=[self.n, self.h], dtype=tf.float32)
+      self.loss = tf.get_variable("loss",shape=[1], dtype=tf.float32) 
+      #self.layers_h = tf.get_variable("layers_h",shape=[self.n,self.h,self.t],dtype=tf.float32) #[]
+      self.layers_z = tf.get_variable("layers_z",shape=[self.n,self.h,self.t],dtype=tf.float32) #[]
+      self.W_pred = tf.get_variable("W_pred",shape=[self.h, 1],initializer=initializer,dtype=tf.float32) # linear layer
+      self.b_pred = tf.get_variable("b_pred",shape=[self.n, 1],initializer=initializer,dtype=tf.float32)
+      self.preds  = tf.get_variable("preds",shape=[self.n, 1],dtype=tf.float32)
+      self.labels = tf.get_variable("labels",shape=[self.n,1],dtype=tf.float32)
+      self.labels = labels
 
-    self.W_hh = tf.get_variable("W_hh", shape=[self.h,self.h],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
-    self.W_ih = tf.get_variable("W_ih", shape=[self.h, self.h],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.n), 0, 1.0, tf.float64)
-    #self.b_h  = tf.get_variable("b_h", shape=[self.n, 1],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
-    #self.b_h_tiled = tf.convert_to_tensor( np.tile(self.b_h.eval(), self.h), dtype=tf.float32 )
-    #self.x_t  = tf.placeholder(name="x_t" , shape=(self.n,self.h),dtype=tf.float32)
-    self.h_prev=tf.get_variable("h_prev", shape=[self.n,self.h],initializer=initializer,dtype=tf.float32) #= tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
-    self.h_t  = tf.get_variable("h_t", shape=[self.n,self.h],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
-    self.W_ho = tf.get_variable("W_ho", shape=[self.h,self.h],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
-    self.b_o  = tf.get_variable("b_o", shape=[self.n, 1],initializer=initializer,dtype=tf.float32) #tf.random_normal((self.h,self.h), 0, 1.0, tf.float64)
-    self.z_t  = tf.get_variable("z_t", shape=[self.n, self.h], dtype=tf.float32) #tf.nn.softmax(tf.matmul(self.W_ho, self.h_t) + self.b_o)
-    self.z_t_max = tf.get_variable("z_t_max", shape=[self.n, self.h], dtype=tf.float32)
-    self.loss = tf.get_variable("loss",shape=[1], dtype=tf.float32) 
-    self.layers_h = tf.get_variable("layers_h",shape=[self.n,self.h,self.t],dtype=tf.float32) #[]
-    self.layers_z = tf.get_variable("layers_z",shape=[self.n,self.h,self.t],dtype=tf.float32) #[]
-    self.W_pred = tf.get_variable("W_pred",shape=[self.h, 1],initializer=initializer,dtype=tf.float32) # linear layer
-    self.b_pred = tf.get_variable("b_pred",shape=[self.n, 1],initializer=initializer,dtype=tf.float32)
-    self.preds  = tf.get_variable("preds",shape=[self.n, 1],dtype=tf.float32)
-    self.labels = tf.get_variable("labels",shape=[self.n,1],dtype=tf.float32)
-    self.labels = labels
+      tf.get_variable("h_-1",shape=[self.n,self.h],initializer=initializer,dtype=tf.float32)
+      for i in range(self.t):
+        tf.get_variable("h_{}".format(i),shape=[self.n,self.h],initializer=self.initializer,dtype=tf.float32) 
+        tf.get_variable("z_{}".format(i),shape=[self.n, self.h],dtype=tf.float32)
 
-  def RU(self, time_step):
+  def RU(self, time_step, h_prev):
     """
     Returns h_t
     """
     #b_h_tiled = tf.convert_to_tensor( np.tile(self.b_h.eval(), self.h), dtype=tf.float32 )
-    return tf.tanh( tf.matmul(self.h_prev, self.W_hh) + tf.matmul(time_step, self.W_ih) ) #+ self.b_h_tiled )
+    return tf.tanh( tf.matmul(h_prev, self.W_hh) + tf.matmul(time_step, self.W_ih) ) #+ self.b_h_tiled )
 
 #  def loss_fn(self, prediction):
 #    """
@@ -67,29 +72,30 @@ class RNNModel():
     """
     print("fwd...")
     self.loss = 0.0
-    tmp_layers_h = []
-    tmp_layers_z = []
-    for i in range(self.t):
-      time_step = tf.convert_to_tensor(self.data[:,i,:], dtype=tf.float32) # n x h
-      self.h_prev = self.h_t # n x h
-      self.h_t = self.RU(time_step) # n x h 
-      tmp_layers_h.append(self.h_t)
-      
-      self.z_t = tf.nn.softmax(tf.matmul(self.h_t, self.W_ho) + tf.convert_to_tensor( np.tile(self.b_o.eval(), self.h), dtype=tf.float32 ) ) # n x h
-      tmp_layers_z.append(self.z_t)
+    #tmp_layers_h = []
+    #tmp_layers_z = []
+    with tf.variable_scope("model", reuse=tf.AUTO_REUSE):
+      for i in range(self.t):
+        time_step = tf.convert_to_tensor(self.data[:,i,:], dtype=tf.float32) # nxh
+        h_t = tf.get_variable("h_{}".format(i)) 
+        h_prev = tf.get_variable("h_{}".format(i-1)) # nxh
+        h_t = self.RU(time_step, h_prev) # nxh 
+        #tmp_layers_h.append(self.h_t)
+        
+        #self.b_o_tiled = tf.reshape(tf.tile(self.b_o, [self.h]), [self.n, self.h])
+        z_t = tf.get_variable("z_{}".format(i))
+        z_t = tf.nn.softmax(tf.matmul(h_t,self.W_ho) + tf.reshape(tf.tile(self.b_o, [1, self.h]), [self.n, self.h]) ) # nxh
+        #tmp_layers_z.append(self.z_t)
 
-      #self.loss += self.loss_fn(self.z_t)
-    self.layers_h = tf.stack(tmp_layers_h)  # https://stackoverflow.com/a/37706972
-    self.layers_z = tf.stack(tmp_layers_z)
-    self.z_t_max = self.z_t
-    self.preds = tf.nn.softmax( tf.matmul(self.z_t_max, self.W_pred) + self.b_pred )
+    #self.layers_h = tf.stack(tmp_layers_h)  # https://stackoverflow.com/a/37706972
+      #self.layers_z = tf.stack(tmp_layers_z)
+      self.z_t_max = z_t
+      self.preds = tf.nn.softmax( tf.matmul(self.z_t_max, self.W_pred) + self.b_pred )
 
-    print("calculating loss...")
-    self.loss = tf.losses.softmax_cross_entropy(self.labels, self.preds, reduction=tf.losses.Reduction.SUM)
-
-
-    #self.loss = self.loss * -1
-    return self.loss
+      print("calculating loss...")
+      self.loss = tf.losses.softmax_cross_entropy(self.labels, self.preds, reduction=tf.losses.Reduction.SUM)
+      #print("loss={}".format(self.loss.eval()))
+      return self.loss
 
   # BPTT
   def bptt(self):
@@ -98,7 +104,10 @@ class RNNModel():
     """
     print("running bptt...")
     alpha = 10**-4
-	
+
+    # untile b_o
+    #self.b_o = self.b_o_tiled[:,1]
+
     #Calculate:
     #1) \frac{\partial{Loss}}{dW_{ho}}
     #   = \sum_t \frac{\partial{Loss}}{dz_t} \frac{\partial{z_t}}{dW_{ho}}
@@ -106,43 +115,48 @@ class RNNModel():
     #   = \sum_t \frac{\partial{Loss}}{dz_t} \frac{\partial{z_t}}{db_o}
     dLdW_ho = 0.0
     dLdB_o = 0.0
-    for i in range(self.t):
-      dLdZ_t = tf.gradients(self.loss, self.layers_z[i])[0] # https://stackoverflow.com/a/38033731/1174594
-      dZdW_ho = tf.gradients(self.layers_z[i], self.W_ho)[0]
-      dZdB_o = tf.gradients(self.layers_z[i], self.b_o)[0]
-      print("dLdZ_t: {}".format(dLdZ_t))
-      print("dZdW_ho: {}".format(dZdW_ho))
-      dLdW_ho += ( dLdZ_t * dZdW_ho )
-      dLdB_o  += ( dLdZ_t * dZdB_o )
-    self.W_ho -= alpha * dLdW_ho #tf.gradients(self.nll, self.W_ho)[0] # https://stackoverflow.com/a/38033731/1174594
-    self.b_o  -= alpha * dLdB_o #tf.gradients(self.nll, self.b_o)[0]
+    with tf.variable_scope("model", reuse=tf.AUTO_REUSE):
+      dLdZ_t = tf.gradients(self.loss, self.z_t_max)[0] # https://stackoverflow.com/a/38033731/1174594
+      for i in range(self.t):
+        z_t = tf.get_variable("z_{}".format(i))
+        dZdW_ho = tf.gradients(z_t, self.W_ho)[0]
+        dZdB_o = tf.gradients(z_t, self.b_o)[0]
+        #print("dZdB_o: {}".format(dZdB_o))
+        #print("dLdZ_t: {}".format(dLdZ_t))
+        #print("dZdW_ho: {}".format(dZdW_ho.eval()))
+        dLdW_ho += tf.matmul(dLdZ_t, dZdW_ho)
+        dLdB_o  += tf.matmul(dLdZ_t, dZdB_o)
+      self.W_ho -= alpha * dLdW_ho #tf.gradients(self.nll, self.W_ho)[0] # https://stackoverflow.com/a/38033731/1174594
+      self.b_o  -= alpha * dLdB_o #tf.gradients(self.nll, self.b_o)[0]
 
-	
-    #Calculate:
-    #1) \frac{\partial{Loss}}{dW_{hh}}
-    #   = \sum_t \sum_k^t \frac{\partial{Loss}}{dz_t} \frac{\partial{z_t}}{dh_t} 
-    #                     \frac{\partial{h_t}}{dh_k} \frac{\partial{h_k}}{dW_{hh}}
-    #2) \frac{\partial{Loss}}{dW_{ih}}
-    #   = \sum_t \sum_k^t \frac{\partial{Loss}}{dz_t} \frac{\partial{z_t}}{dh_t}
-    #                     \frac{\partial{h_t}}{dh_k} \frac{\partial{h_k}}{dW_{ih}}
-    dLdW_hh = 0.0
-    dLdW_ih = 0.0
-    for j in range(1, self.t, 1):
-      dL_jdW_hh = 0.0
-      dL_jdW_ih = 0.0
-	
-      dL_jdZ_j = tf.gradients(self.loss, self.layers_z[j])[0]
-      dZ_jdH_j = tf.gradients(self.loss, self.layers_h[j])[0]
-      for k in range(j-1, 0, -1):
-        dH_jdH_k = tf.gradients(self.layers_h[j], self.layers_h[k])[0]
-        dH_kdW_hh= tf.gradients(self.layers_h[k], self.W_hh)[0]
-        dL_jdW_hh += ( dL_jdZ_j * dZ_jdH_j * dH_jdH_k * dH_kdW_hh )
-        dL_jdW_ih += ( dL_jdZ_j * dZ_jdH_j * dH_jdH_k * dH_kdW_ih )
-      dLdW_hh += dL_jdW_hh
-      dLdW_ih += dL_jdW_ih
-    self.W_hh -= alpha * dLdW_hh
-    self.W_ih -= alpha * dLdW_ih
-    #self.b_h  -= # should I neglect this?
+          
+      #Calculate:
+      #1) \frac{\partial{Loss}}{dW_{hh}}
+      #   = \sum_t \sum_k^t \frac{\partial{Loss}}{dz_t} \frac{\partial{z_t}}{dh_t} 
+      #                     \frac{\partial{h_t}}{dh_k} \frac{\partial{h_k}}{dW_{hh}}
+      #2) \frac{\partial{Loss}}{dW_{ih}}
+      #   = \sum_t \sum_k^t \frac{\partial{Loss}}{dz_t} \frac{\partial{z_t}}{dh_t}
+      #                     \frac{\partial{h_t}}{dh_k} \frac{\partial{h_k}}{dW_{ih}}
+      dLdW_hh = 0.0
+      dLdW_ih = 0.0
+      for j in range(1, self.t, 1):
+        dL_jdW_hh = 0.0
+        dL_jdW_ih = 0.0
+
+        hj = tf.get_variable("h_{}".format(j))
+        dL_jdZ_j = tf.gradients(self.loss, self.z_t_max)[0]
+        dZ_jdH_j = tf.gradients(self.loss, hj)[0]
+        for k in range(j-1, 0, -1):
+          hk = tf.get_variable("h_{}".format(k))
+          dH_jdH_k = tf.gradients(hj, hk)[0]
+          dH_kdW_hh= tf.gradients(hk, self.W_hh)[0]
+          dL_jdW_hh += ( dL_jdZ_j * dZ_jdH_j * dH_jdH_k * dH_kdW_hh )
+          dL_jdW_ih += ( dL_jdZ_j * dZ_jdH_j * dH_jdH_k * dH_kdW_ih )
+        dLdW_hh += dL_jdW_hh
+        dLdW_ih += dL_jdW_ih
+      self.W_hh -= alpha * dLdW_hh
+      self.W_ih -= alpha * dLdW_ih
+      #self.b_h  -= # should I neglect this?
 
   def run_once(self):
     saver = tf.train.Saver()
