@@ -1,3 +1,8 @@
+#
+# Adapted from https://medium.com/@erikhallstrm/hello-world-rnn-83cd7105b767
+#
+
+
 from os import path
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -23,14 +28,14 @@ data_train, data_test, y_train, y_test = train_test_split(data, labels, test_siz
 n_epochs = 1
 batch_size = 4
 num_classes = 2
-learning_rate = 0.01
+learning_rate = 0.1
 epsilon = 10**-8
 n_data = len(data_train)		#n
 n_seq = data_train.shape[1]		#t: time steps
 n_syscall = data_train.shape[2]		#h: system call and args per time step
 
 ## model
-initializer = tf.random_uniform_initializer(0,1)
+initializer = tf.random_uniform_initializer(-1,1)
 
 batch_x = tf.placeholder(name="batch_x", shape=(batch_size, n_seq, n_syscall), dtype=tf.float32)
 batch_y = tf.placeholder(name="batch_y", shape=(batch_size), dtype=tf.int32)
@@ -38,20 +43,22 @@ h0 = tf.placeholder(name="h0", shape=(batch_size, n_syscall), dtype=tf.float32)
 
 W_hh = tf.get_variable("W_hh", shape=[n_syscall, n_syscall], initializer=initializer, dtype=tf.float32)
 W_ih = tf.get_variable("W_ih", shape=[n_syscall, n_syscall], initializer=initializer, dtype=tf.float32)
-W_ho = tf.get_variable("W_ho", shape=[n_syscall, 1], initializer=initializer, dtype=tf.float32)
-b_o  = tf.get_variable("b_o",  shape=[batch_size, 1], initializer=initializer, dtype=tf.float32) 
+W_ho = tf.get_variable("W_ho", shape=[n_syscall, num_classes], initializer=initializer, dtype=tf.float32)
+b_o  = tf.get_variable("b_o",  shape=[batch_size,num_classes], initializer=initializer, dtype=tf.float32) 
 
 ## fwd
 print("fwd")
+layers_h = []
 h_prev = h0
 for i in range(n_seq):
   x_t = batch_x[:,i,:] #nxh
 
   h_t = tf.tanh( tf.matmul(h_prev, W_hh) + tf.matmul(x_t, W_ih) )
+  layers_h.append(h_t)
   h_prev = h_t
 h_max = h_t
-logits_series = tf.matmul(h_max, W_ho) + b_o
-logits_series = logits_series + epsilon
+
+logits_series = tf.matmul(h_t, W_ho) + b_o + epsilon
 losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series)
 total_loss = tf.reduce_mean(losses)
 train_step = tf.train.AdagradOptimizer(learning_rate).minimize(total_loss)
@@ -67,14 +74,14 @@ for epoch_idx in range(n_epochs):
 
     for batch_pos in range(0, n_data, batch_size):
       data_batch = data_train[batch_pos:batch_pos + batch_size]
-      labels_batch = y_train[batch_pos:batch_pos + batch_size].flatten()
+      labels_batch = (1 + y_train[batch_pos:batch_pos + batch_size].flatten()) / 2 # change values from {-1,1} to {0,1}
       sanity_check(data_batch)
-      print("minx:{}, maxx:{}".format(np.amin(data_batch), np.amax(data_batch)))
+      print(labels_batch)
 
       print("processing data {} with labels {}".format(data_batch.shape, labels_batch.shape))
       _total_loss, _train_step, h_init = sess.run([total_loss, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
       #print("h init: {}".format(h_init))
-      #print("h_t: {}".format(h_t.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
+      print("h_t: {}".format(h_t.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       print("Epoch: {}, Batch: {}, Loss: {}".format(epoch_idx, batch_pos // batch_size, _total_loss))
       #print(">W_hh: {}, W_ih:{}, W_ho:{}, b_o: {}".format(W_hh.eval(), W_ih.eval(), W_ho.eval(), b_o.eval()))
 
