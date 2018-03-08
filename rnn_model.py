@@ -23,7 +23,7 @@ labels= np.load("labels.npy")
 ## cross validation prep
 data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=0.2)
 
-## model params
+## hyperparams
 n_epochs = 100
 batch_size = 4
 num_classes = 2
@@ -33,7 +33,7 @@ n_data = len(data_train)		#n
 n_seq = data_train.shape[1]		#t: time steps
 n_syscall = data_train.shape[2]		#h: system call and args per time step
 
-## model
+## model params
 initializer = tf.random_uniform_initializer(0,1)
 
 batch_x = tf.placeholder(name="batch_x", shape=(batch_size, n_seq, n_syscall), dtype=tf.float32)
@@ -45,7 +45,7 @@ W_ih = tf.get_variable("W_ih", shape=[n_syscall, n_syscall], initializer=initial
 W_ho = tf.get_variable("W_ho", shape=[n_syscall, num_classes], initializer=initializer, dtype=tf.float32)
 b_o  = tf.get_variable("b_o",  shape=[batch_size,num_classes], initializer=initializer, dtype=tf.float32) 
 
-## fwd
+## model
 layers_h = []
 h_prev = h0
 for i in range(n_seq):
@@ -61,7 +61,7 @@ losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=l
 total_loss = tf.reduce_mean(losses)
 train_step = tf.train.AdagradOptimizer(learning_rate).minimize(total_loss)
 
-##
+## forward run
 for epoch_idx in range(n_epochs):
   ## run epoch
   with tf.Session() as sess:
@@ -72,7 +72,7 @@ for epoch_idx in range(n_epochs):
     for batch_pos in range(0, n_data, batch_size):
       data_batch = data_train[batch_pos:batch_pos + batch_size]
       labels_batch = y_train[batch_pos:batch_pos + batch_size].flatten()
-      sanity_check(data_batch)
+      sanity_check(data_batch) # checks for nan values
 
       _total_loss, _train_step, h_init = sess.run([total_loss, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
       print("Epoch: {}, Batch: {}, Loss: {}".format(epoch_idx, batch_pos // batch_size, _total_loss))
