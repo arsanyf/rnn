@@ -32,6 +32,7 @@ epsilon = 10**-8
 n_data = len(data_train)		#n
 n_seq = data_train.shape[1]		#t: time steps
 n_syscall = data_train.shape[2]		#h: system call and args per time step
+l_a = 0.001 # lambda attention model
 
 ## model params
 initializer = tf.random_uniform_initializer(0,1)
@@ -39,14 +40,19 @@ initializer = tf.random_uniform_initializer(0,1)
 batch_x = tf.placeholder(name="batch_x", shape=(batch_size, n_seq, n_syscall), dtype=tf.float32)
 batch_y = tf.placeholder(name="batch_y", shape=(batch_size), dtype=tf.int32)
 h0 = tf.placeholder(name="h0", shape=(batch_size, n_syscall), dtype=tf.float32) 
+#attention_vector = tf.placeholder(name="attention_vector", shape=(n_seq), dtype=tf.float32)
 
 W_hh = tf.get_variable("W_hh", shape=[n_syscall, n_syscall], initializer=initializer, dtype=tf.float32)
 W_ih = tf.get_variable("W_ih", shape=[n_syscall, n_syscall], initializer=initializer, dtype=tf.float32)
 W_ho = tf.get_variable("W_ho", shape=[n_syscall, num_classes], initializer=initializer, dtype=tf.float32)
 b_o  = tf.get_variable("b_o",  shape=[batch_size,num_classes], initializer=initializer, dtype=tf.float32) 
 
+W_a = tf.get_variable("W_a", shape=[n_syscall, n_syscall], initializer=initializer, dtype=tf.float32)
+
+
 ## model
 layers_h = []
+attention_vector = np.zeros((n_seq), dtype=np.float32)
 h_prev = h0
 for i in range(n_seq):
   x_t = batch_x[:,i,:] #nxh
@@ -54,10 +60,16 @@ for i in range(n_seq):
   h_t = tf.tanh( tf.matmul(h_prev, W_hh) + tf.matmul(x_t, W_ih) )
   layers_h.append(h_t)
   h_prev = h_t
+
+  #attention model steps
+  a_t = tf.norm(tf.matmul(h_t, W_a))
+  g_t = a_t * x_t
+  ha_t = tf.tanh( tf.matmul(h_prev, W_hh) + g_t )
+
 h_max = h_t
 
 logits_series = tf.matmul(h_t, W_ho) + b_o + epsilon
-losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series)
+losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series) + l_a * tf.reduce_sum(attention_vector)
 total_loss = tf.reduce_mean(losses)
 train_step = tf.train.AdagradOptimizer(learning_rate).minimize(total_loss)
 
