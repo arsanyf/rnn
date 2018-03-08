@@ -25,7 +25,7 @@ labels= np.load("labels.npy")
 data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=5)
 
 ## hyperparams
-n_epochs = 1
+n_epochs = 10
 batch_size = 5
 num_classes = 2
 learning_rate = 0.01
