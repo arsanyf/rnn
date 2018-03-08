@@ -48,7 +48,6 @@ b_o  = tf.get_variable("b_o",  shape=[batch_size,num_classes], initializer=initi
 ## fwd
 layers_h = []
 h_prev = h0
-#h_t = np.zeros((batch_size, n_syscall), dtype=np.float32)
 for i in range(n_seq):
   x_t = batch_x[:,i,:] #nxh
 
@@ -61,7 +60,6 @@ logits_series = tf.matmul(h_t, W_ho) + b_o + epsilon
 losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series)
 total_loss = tf.reduce_mean(losses)
 train_step = tf.train.AdagradOptimizer(learning_rate).minimize(total_loss)
-#train_step = tf.train.GradientDescentOptimizer(learning_rate).minimize(total_loss)
 
 ##
 for epoch_idx in range(n_epochs):
@@ -72,21 +70,12 @@ for epoch_idx in range(n_epochs):
     h_init = np.zeros((batch_size, n_syscall), dtype=np.float32)
 
     for batch_pos in range(0, n_data, batch_size):
-      #data_batch = np.random.rand(batch_size, n_seq, n_syscall) * 50
       data_batch = data_train[batch_pos:batch_pos + batch_size]
       labels_batch = y_train[batch_pos:batch_pos + batch_size].flatten()
       sanity_check(data_batch)
-      #print(labels_batch)
 
-      print("processing data {} with labels {}".format(data_batch.shape, labels_batch.shape))
       _total_loss, _train_step, h_init = sess.run([total_loss, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
-      #print("h init: {}".format(h_init))
-      #for layer in layers_h:
-      #  with open("layers_h.txt", "a") as f:
-      #    f.write("{}\n".format(layer.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
-      #print("h_t: {}".format(h_t.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       print("Epoch: {}, Batch: {}, Loss: {}".format(epoch_idx, batch_pos // batch_size, _total_loss))
-      #print(">W_hh: {}, W_ih:{}, W_ho:{}, b_o: {}".format(W_hh.eval(), W_ih.eval(), W_ho.eval(), b_o.eval()))
 
-    #G_writer = tf.summary.FileWriter('arsany/graph', sess.graph)
+    G_writer = tf.summary.FileWriter('arsany/graph', sess.graph)
 
