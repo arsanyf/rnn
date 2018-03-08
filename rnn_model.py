@@ -6,6 +6,7 @@
 from os import path
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_curve, auc
 import tensorflow as tf
 import math
 #import matplotlib.pyplot as plt
@@ -24,7 +25,7 @@ labels= np.load("labels.npy")
 data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=5)
 
 ## hyperparams
-n_epochs = 10
+n_epochs = 1
 batch_size = 5
 num_classes = 2
 learning_rate = 0.01
@@ -65,6 +66,8 @@ total_loss = tf.reduce_mean(losses)
 probs_x = tf.cast(tf.argmax(tf.nn.softmax(logits_series), 1), tf.float32)
 compare = tf.cast(tf.equal(tf.cast(batch_y, tf.float32), probs_x), tf.float32)
 accuracy = tf.div(tf.reduce_sum(compare), batch_size, "Accuracy")
+#fpr, tpr, thresholds = roc_curve(batch_y, probs_x, pos_label=1)
+#auc = auc(fpr, tpr)
 
 ### training
 train_step = tf.train.AdagradOptimizer(learning_rate).minimize(total_loss)
@@ -98,8 +101,11 @@ with tf.Session() as sess:
 #        plt.plot(loss_list)
 
     ## validation
-  _, v_loss, v_acc = sess.run([h_t, total_loss, accuracy], feed_dict={batch_x:data_test, batch_y:y_test.flatten(), h0:h_init})
-  print("Validation>> Loss:{}, Accuracy: {}%".format(v_loss, v_acc*100))
+  _, v_loss, v_probs_x, v_acc = sess.run([h_t, total_loss, probs_x, accuracy], feed_dict={batch_x:data_test, batch_y:y_test.flatten(), h0:h_init})
+
+  fpr, tpr, thresholds = roc_curve(y_test.flatten(), v_probs_x, pos_label=1)
+  v_auc = auc(fpr, tpr)
+  print("Validation>> Loss:{}, Accuracy: {}%, FPR: {}, TPR: {}, AUC: {}".format(v_loss, v_acc*100, fpr, tpr, v_auc))
 
   G_writer = tf.summary.FileWriter('arsany/graph', sess.graph)
 
