@@ -33,7 +33,7 @@ epsilon = 10**-8
 n_data = len(data_train)		#n
 n_seq = data_train.shape[1]		#t: time steps
 n_syscall = data_train.shape[2]		#h: system call and args per time step
-l_a = 0.001 # lambda attention model
+lambda_a = 0.001 # lambda attention model
 
 ## model params
 initializer = tf.random_uniform_initializer(0,1)
@@ -48,13 +48,17 @@ W_ih = tf.get_variable("W_ih", shape=[n_syscall, n_syscall], initializer=initial
 W_ho = tf.get_variable("W_ho", shape=[n_syscall, num_classes], initializer=initializer, dtype=tf.float32)
 b_o  = tf.get_variable("b_o",  shape=[batch_size,num_classes], initializer=initializer, dtype=tf.float32) 
 
-W_a = tf.get_variable("W_a", shape=[n_syscall, n_syscall], initializer=initializer, dtype=tf.float32)
-
+W_a = tf.get_variable("W_a", shape=[n_syscall, 1], initializer=initializer, dtype=tf.float32)
+W_u = tf.get_variable("W_u", shape=[n_syscall, n_syscall], initializer=initializer, dtype=tf.float32)
 
 ## model
 layers_h = []
-attention_vector = np.zeros((n_seq), dtype=np.float32)
+layers_ha= []
+attention_vector = [] #np.zeros((batch_size, n_seq), dtype=np.float32)
+feature_cost = np.ones((batch_size, n_seq), dtype=np.float32)
 h_prev = h0
+input_filtered = []
+###attention layer
 for i in range(n_seq):
   x_t = batch_x[:,i,:] #nxh
 
@@ -62,16 +66,21 @@ for i in range(n_seq):
   layers_h.append(h_t)
   h_prev = h_t
 
-  #attention model steps
-  a_t = tf.norm(tf.matmul(h_t, W_a))
-  g_t = a_t * x_t
-  ha_t = tf.tanh( tf.matmul(h_prev, W_hh) + g_t )
+for i in range(n_seq):
+  a_t = tf.norm(tf.matmul(layers_h[i], W_a), axis=1) #nx1
+  attention_vector.append(a_t)
+  g_t = tf.multiply(a_t, x_t) # Hadamard Product (only when training)
+  input_filtered.append(g_t)
 
-h_max = h_t
+  ha_t = tf.tanh( tf.matmul(layers_h[i], W_hh) + tf.matmul(input_filtered[i], W_u) )
+  layers_ha.append(ha_t)
+
+h_max = ha_t
+attention_vector = tf.stack(attention_vector)
 
 ### loss calculation
-logits_series = tf.matmul(h_t, W_ho) + b_o + epsilon
-losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series) + l_a * tf.reduce_sum(attention_vector)
+logits_series = tf.matmul(h_max, W_ho) + b_o + epsilon
+losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series) + lambda_a * tf.reduce_sum(tf.matmul(feature_cost, attention_vector))
 total_loss = tf.reduce_mean(losses)
 
 ### accuracy calculation
@@ -119,5 +128,5 @@ with tf.Session() as sess:
   v_auc = auc(fpr, tpr)
   print("Validation>> Loss:{}, Accuracy: {}%, FPR: {}, TPR: {}, AUC: {}".format(v_loss, v_acc*100, fpr, tpr, v_auc))
 
-  G_writer = tf.summary.FileWriter('arsany/graph', sess.graph)
+  #G_writer = tf.summary.FileWriter('arsany/graph', sess.graph)
 
