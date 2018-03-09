@@ -28,7 +28,7 @@ data_train, data_test, y_train, y_test = train_test_split(data, labels, test_siz
 n_epochs = 10
 batch_size = 5
 num_classes = 2
-learning_rate = 0.01
+learning_rate = 0.0001
 epsilon = 10**-8
 n_data = len(data_train)		#n
 n_seq = data_train.shape[1]		#t: time steps
@@ -55,11 +55,17 @@ for i in range(n_seq):
   h_t = tf.tanh( tf.matmul(h_prev, W_hh) + tf.matmul(x_t, W_ih) )
   layers_h.append(h_t)
   h_prev = h_t
-h_max = h_t
+
+### maxpooling
+#layers_h = tf.stack(layers_h)
+h_max = tf.nn.max_pool(tf.reshape(layers_h,[batch_size, n_seq, n_syscall, 1]), [1, n_seq, 1, 1], [1, n_seq, 1, 1], "VALID")
+h_max = tf.reshape(h_max, [batch_size, n_syscall])
+
 
 ### loss calculation
-logits_series = tf.matmul(h_t, W_ho) + b_o + epsilon
+logits_series = tf.matmul(h_max, W_ho) + b_o + epsilon
 losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series)
+#losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series)
 total_loss = tf.reduce_mean(losses)
 
 ### accuracy calculation
@@ -89,14 +95,16 @@ with tf.Session() as sess:
     for batch_pos in range(0, n_data, batch_size):
       data_batch = data_train[batch_pos:batch_pos + batch_size]
       labels_batch = y_train[batch_pos:batch_pos + batch_size].flatten()
-      sanity_check(data_batch) # checks for nan values
+      #sanity_check(data_batch) # checks for nan values
 
       _total_loss, _train_step, h_init = sess.run([total_loss, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
       print("Epoch: {}, Batch: {}, Loss: {}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss))
       loss_list.append(_total_loss)
+      #print("h_max:{}".format(h_max.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("probs_x:{}".format(probs_x.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("labels :{}".format(labels_batch))
-
+      #with open("logits_series.txt", "a") as f:
+      #  f.write("Epoch: {}, Batch: {}\n{}\n".format(epoch_idx +1 , batch_pos // batch_size + 1, h_t.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
 #      if batch_pos  == n_data - batch_size: # plot at the end of the epoch
 #        plt.plot(loss_list)
 
@@ -107,5 +115,5 @@ with tf.Session() as sess:
   v_auc = auc(fpr, tpr)
   print("Validation>> Loss:{}, Accuracy: {}%, FPR: {}, TPR: {}, AUC: {}".format(v_loss, v_acc*100, fpr, tpr, v_auc))
 
-  G_writer = tf.summary.FileWriter('arsany/graph', sess.graph)
+  #G_writer = tf.summary.FileWriter('arsany/graph', sess.graph)
 
