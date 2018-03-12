@@ -66,19 +66,19 @@ for i in range(n_seq):
   layers_h.append(h_t)
   h_prev = h_t
 
-for i in range(n_seq):
-  a_t = tf.matmul(layers_h[i], W_a) #nxh
+  a_t = tf.matmul(h_t, W_a) #nxh
   attention_vector.append(a_t)
   g_t = tf.multiply(a_t, x_t) # Hadamard Product (only when training)
   input_filtered.append(g_t)
 
-  ha_t = tf.tanh( tf.matmul(layers_h[i], W_hh) + tf.matmul(input_filtered[i], W_u) )
+  ha_t = tf.tanh( tf.matmul(h_t, W_hh) + tf.matmul(g_t, W_u) )
   layers_ha.append(ha_t)
 
-h_max = ha_t
+h_max = tf.convert_to_tensor(ha_t, dtype=tf.float32)
 
 ### loss calculation
-logits_series = tf.matmul(h_max, W_ho) + b_o + lambda_a * tf.reduce_sum(tf.matmul(feature_cost, tf.reshape(attention_vector, [n_seq, batch_size]))) + epsilon
+f_cost = lambda_a * tf.reduce_sum(tf.matmul(feature_cost, tf.reshape(tf.convert_to_tensor(attention_vector), [n_seq, batch_size] )))
+logits_series = tf.matmul(h_max, W_ho) + b_o + f_cost + epsilon
 losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series)
 # + lambda_a * tf.reduce_sum(tf.matmul(feature_cost, tf.reshape(attention_vector, [n_seq, batch_size])))
 total_loss = tf.reduce_mean(losses)
@@ -112,8 +112,8 @@ with tf.Session() as sess:
       labels_batch = y_train[batch_pos:batch_pos + batch_size].flatten()
       sanity_check(data_batch) # checks for nan values
 
-      _total_loss, _train_step, h_init = sess.run([total_loss, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
-      print("Epoch: {}, Batch: {}, Loss: {}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss))
+      _total_loss, _f_cost, _train_step, h_init = sess.run([total_loss, f_cost, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
+      print("Epoch: {}, Batch: {}, Loss: {}, Cost: {}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss, _f_cost))
       loss_list.append(_total_loss)
       #print("probs_x:{}".format(probs_x.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("labels :{}".format(labels_batch))
