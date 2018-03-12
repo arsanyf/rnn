@@ -25,10 +25,10 @@ labels= np.load("labels.npy")
 data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=5)
 
 ## hyperparams
-n_epochs = 10
+n_epochs = 50
 batch_size = 5
 num_classes = 2
-learning_rate = 0.001
+learning_rate = 0.0001
 epsilon = 10**-8
 n_data = len(data_train)		#n
 n_seq = data_train.shape[1]		#t: time steps
@@ -58,10 +58,11 @@ for i in range(n_seq):
   h_prev = h_t
 
 ### maxpooling
-hs = tf.convert_to_tensor(layers_h, dtype=tf.float32) #tf.reshape(layers_h,[batch_size, n_seq, n_syscall])
-#hs = tf.Print(hs, [hs])
+hs = tf.transpose(tf.convert_to_tensor(layers_h, dtype=tf.float32)) #tf.reshape(layers_h,[batch_size, n_seq, n_syscall])
+h_max = tf.nn.max_pool(tf.reshape(hs, [n_syscall, batch_size, n_seq, 1]), [1, 1, n_seq, 1], [1, 1, n_seq, 1], "VALID")
+h_max = tf.transpose(tf.reshape(h_max, [n_syscall, batch_size]))
 
-h_max = tf.reduce_max(hs, axis=0, name="Maxpool")
+#h_max = tf.reduce_max(hs, axis=0, name="Maxpool")
 
 ### loss calculation
 logits_series = tf.matmul(h_max, W_ho) + b_o + epsilon
