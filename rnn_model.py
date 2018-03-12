@@ -28,7 +28,7 @@ data_train, data_test, y_train, y_test = train_test_split(data, labels, test_siz
 n_epochs = 10
 batch_size = 5
 num_classes = 2
-learning_rate = 0.0001
+learning_rate = 0.001
 epsilon = 10**-8
 n_data = len(data_train)		#n
 n_seq = data_train.shape[1]		#t: time steps
@@ -49,6 +49,7 @@ b_o  = tf.get_variable("b_o",  shape=[batch_size,num_classes], initializer=initi
 ## model
 layers_h = []
 h_prev = h0
+h_t=None
 for i in range(n_seq):
   x_t = batch_x[:,i,:] #nxh
 
@@ -57,10 +58,10 @@ for i in range(n_seq):
   h_prev = h_t
 
 ### maxpooling
-#layers_h = tf.stack(layers_h)
-h_max = tf.nn.max_pool(tf.reshape(layers_h,[batch_size, n_seq, n_syscall, 1]), [1, n_seq, 1, 1], [1, n_seq, 1, 1], "VALID")
-h_max = tf.reshape(h_max, [batch_size, n_syscall])
+hs = tf.convert_to_tensor(layers_h, dtype=tf.float32) #tf.reshape(layers_h,[batch_size, n_seq, n_syscall])
+#hs = tf.Print(hs, [hs])
 
+h_max = tf.reduce_max(hs, axis=0, name="Maxpool")
 
 ### loss calculation
 logits_series = tf.matmul(h_max, W_ho) + b_o + epsilon
@@ -97,14 +98,14 @@ with tf.Session() as sess:
       labels_batch = y_train[batch_pos:batch_pos + batch_size].flatten()
       #sanity_check(data_batch) # checks for nan values
 
-      _total_loss, _train_step, h_init = sess.run([total_loss, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
+      _total_loss, _, _train_step, h_init = sess.run([total_loss, h_max, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
       print("Epoch: {}, Batch: {}, Loss: {}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss))
       loss_list.append(_total_loss)
       #print("h_max:{}".format(h_max.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("probs_x:{}".format(probs_x.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("labels :{}".format(labels_batch))
-      #with open("logits_series.txt", "a") as f:
-      #  f.write("Epoch: {}, Batch: {}\n{}\n".format(epoch_idx +1 , batch_pos // batch_size + 1, h_t.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
+      #with open("hs.txt", "a") as f:
+      #  f.write("Epoch: {}, Batch: {}\n{}\n".format(epoch_idx +1 , batch_pos // batch_size + 1, h_max)) #.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
 #      if batch_pos  == n_data - batch_size: # plot at the end of the epoch
 #        plt.plot(loss_list)
 
