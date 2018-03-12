@@ -67,7 +67,7 @@ for i in range(n_seq):
   h_prev = h_t
 
 for i in range(n_seq):
-  a_t = tf.norm(tf.matmul(layers_h[i], W_a), axis=1) #nx1
+  a_t = tf.matmul(layers_h[i], W_a) #nxh
   attention_vector.append(a_t)
   g_t = tf.multiply(a_t, x_t) # Hadamard Product (only when training)
   input_filtered.append(g_t)
@@ -76,11 +76,11 @@ for i in range(n_seq):
   layers_ha.append(ha_t)
 
 h_max = ha_t
-attention_vector = tf.stack(attention_vector)
 
 ### loss calculation
-logits_series = tf.matmul(h_max, W_ho) + b_o + epsilon
-losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series) + lambda_a * tf.reduce_sum(tf.matmul(feature_cost, attention_vector))
+logits_series = tf.matmul(h_max, W_ho) + b_o + lambda_a * tf.reduce_sum(tf.matmul(feature_cost, tf.reshape(attention_vector, [n_seq, batch_size]))) + epsilon
+losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series)
+# + lambda_a * tf.reduce_sum(tf.matmul(feature_cost, tf.reshape(attention_vector, [n_seq, batch_size])))
 total_loss = tf.reduce_mean(losses)
 
 ### accuracy calculation
