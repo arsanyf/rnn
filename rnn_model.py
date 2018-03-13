@@ -41,7 +41,6 @@ initializer = tf.random_uniform_initializer(0,1)
 batch_x = tf.placeholder(name="batch_x", shape=(batch_size, n_seq, n_syscall), dtype=tf.float32)
 batch_y = tf.placeholder(name="batch_y", shape=(batch_size), dtype=tf.int32)
 h0 = tf.placeholder(name="h0", shape=(batch_size, n_syscall), dtype=tf.float32) 
-#attention_vector = tf.placeholder(name="attention_vector", shape=(n_seq), dtype=tf.float32)
 
 W_hh = tf.get_variable("W_hh", shape=[n_syscall, n_syscall], initializer=initializer, dtype=tf.float32)
 W_ih = tf.get_variable("W_ih", shape=[n_syscall, n_syscall], initializer=initializer, dtype=tf.float32)
@@ -50,36 +49,36 @@ b_o  = tf.get_variable("b_o",  shape=[batch_size,num_classes], initializer=initi
 
 W_a = tf.get_variable("W_a", shape=[n_syscall, 1], initializer=initializer, dtype=tf.float32)
 W_u = tf.get_variable("W_u", shape=[n_syscall, n_syscall], initializer=initializer, dtype=tf.float32)
+a_t = tf.get_variable("a_t", shape=[batch_size, n_syscall], initializer=initializer, dtype=tf.float32)
 
 ## model
 layers_h = []
 layers_ha= []
-attention_vector = [] #np.zeros((batch_size, n_seq), dtype=np.float32)
+attention_vector = [] 
 feature_cost = np.ones((batch_size, n_seq), dtype=np.float32)
 h_prev = h0
 
 input_filtered = []
 ###attention layer
-h_t=None
+#h_t=None
 for i in range(n_seq):
   x_t = batch_x[:,i,:] #nxh
 
   h_t = tf.tanh( tf.matmul(h_prev, W_hh) + tf.matmul(x_t, W_ih) )
   layers_h.append(h_t)
-  h_prev = h_t
 
-  a_t = tf.matmul(h_t, W_a) #nxh
+  a_t = tf.norm(tf.tanh(tf.matmul(h_prev, W_a)), axis=1, keep_dims=True) #nxh
   attention_vector.append(a_t)
   g_t = tf.multiply(a_t, x_t) # Hadamard Product (only when training)
   input_filtered.append(g_t)
 
-  ha_t = tf.tanh( tf.matmul(h_t, W_hh) + tf.matmul(g_t, W_u) )
+  ha_t = tf.tanh( tf.matmul(h_prev, W_hh) + tf.matmul(g_t, W_u) )
   layers_ha.append(ha_t)
 
-h_max = tf.convert_to_tensor(ha_t, dtype=tf.float32)
+  h_prev = h_t
 
 ### maxpooling
-hs = tf.transpose(tf.convert_to_tensor(layers_h, dtype=tf.float32))
+hs = tf.transpose(tf.convert_to_tensor(layers_ha, dtype=tf.float32))
 h_max = tf.nn.max_pool(tf.reshape(hs, [n_syscall, batch_size, n_seq, 1]), [1, 1, n_seq, 1], [1, 1, n_seq, 1], "VALID")
 h_max = tf.transpose(tf.reshape(h_max, [n_syscall, batch_size]))
 
@@ -120,15 +119,16 @@ with tf.Session() as sess:
       labels_batch = y_train[batch_pos:batch_pos + batch_size].flatten()
       #sanity_check(data_batch) # checks for nan values
 
-      _total_loss, _, _f_cost, _train_step, h_init = sess.run([total_loss, h_max, f_cost, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
+      _total_loss, _f_cost, _train_step, h_init, _, _, _, _ = sess.run([total_loss, f_cost, train_step, h_t, a_t, g_t, ha_t, h_max], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
       print("Epoch: {:2d}, Batch: {:2d}, Loss: {}, Cost: {}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss, _f_cost))
 
       loss_list.append(_total_loss)
       #print("h_max:{}".format(h_max.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("probs_x:{}".format(probs_x.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("labels :{}".format(labels_batch))
-      #with open("hs.txt", "a") as f:
-      #  f.write("Epoch: {}, Batch: {}\n{}\n".format(epoch_idx +1 , batch_pos // batch_size + 1, h_max)) #.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
+      #with open("fcost.txt", "a") as f:
+      #  f.write("{}\n".format(_f_cost)) #a_t.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
+      #  f.write("Epoch: {}, Batch: {}\n{}\n".format(epoch_idx +1 , batch_pos // batch_size + 1, h_max.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
 #      if batch_pos  == n_data - batch_size: # plot at the end of the epoch
 #        plt.plot(loss_list)
 
@@ -138,6 +138,5 @@ with tf.Session() as sess:
   fpr, tpr, thresholds = roc_curve(y_test.flatten(), v_probs_x, pos_label=1)
   v_auc = auc(fpr, tpr)
   print("Validation>> Loss:{}, Accuracy: {}%, FPR: {}, TPR: {}, AUC: {}".format(v_loss, v_acc*100, fpr, tpr, v_auc))
-
   #G_writer = tf.summary.FileWriter('arsany/graph', sess.graph)
 
