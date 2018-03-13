@@ -64,10 +64,10 @@ input_filtered = []
 for i in range(n_seq):
   x_t = batch_x[:,i,:] #nxh
 
-  h_t = tf.tanh( tf.matmul(h_prev, W_hh) + tf.matmul(x_t, W_ih) )
+  h_t = tf.sigmoid( tf.matmul(h_prev, W_hh) + tf.matmul(x_t, W_ih) )
   layers_h.append(h_t)
 
-  a_t = tf.norm(tf.tanh(tf.matmul(h_prev, W_a)), axis=1, keep_dims=True) #nxh
+  a_t = tf.norm(tf.sigmoid(tf.matmul(h_prev, W_a)), axis=1, keep_dims=True) #nxh
   attention_vector.append(a_t)
   g_t = tf.multiply(a_t, x_t) # Hadamard Product (only when training)
   input_filtered.append(g_t)
