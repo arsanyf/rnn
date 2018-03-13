@@ -25,10 +25,10 @@ labels= np.load("labels.npy")
 data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=5)
 
 ## hyperparams
-n_epochs = 10
+n_epochs = 50
 batch_size = 5
 num_classes = 2
-learning_rate = 0.01
+learning_rate = 0.0001
 epsilon = 10**-8
 n_data = len(data_train)		#n
 n_seq = data_train.shape[1]		#t: time steps
@@ -57,8 +57,10 @@ layers_ha= []
 attention_vector = [] #np.zeros((batch_size, n_seq), dtype=np.float32)
 feature_cost = np.ones((batch_size, n_seq), dtype=np.float32)
 h_prev = h0
+
 input_filtered = []
 ###attention layer
+h_t=None
 for i in range(n_seq):
   x_t = batch_x[:,i,:] #nxh
 
@@ -76,9 +78,17 @@ for i in range(n_seq):
 
 h_max = tf.convert_to_tensor(ha_t, dtype=tf.float32)
 
+### maxpooling
+hs = tf.transpose(tf.convert_to_tensor(layers_h, dtype=tf.float32))
+h_max = tf.nn.max_pool(tf.reshape(hs, [n_syscall, batch_size, n_seq, 1]), [1, 1, n_seq, 1], [1, 1, n_seq, 1], "VALID")
+h_max = tf.transpose(tf.reshape(h_max, [n_syscall, batch_size]))
+
 ### loss calculation
 f_cost = lambda_a * tf.reduce_sum(tf.matmul(feature_cost, tf.reshape(tf.convert_to_tensor(attention_vector), [n_seq, batch_size] )))
+
+### loss calculation
 logits_series = tf.matmul(h_max, W_ho) + b_o + f_cost + epsilon
+
 losses = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=batch_y, logits=logits_series)
 # + lambda_a * tf.reduce_sum(tf.matmul(feature_cost, tf.reshape(attention_vector, [n_seq, batch_size])))
 total_loss = tf.reduce_mean(losses)
@@ -87,8 +97,6 @@ total_loss = tf.reduce_mean(losses)
 probs_x = tf.cast(tf.argmax(tf.nn.softmax(logits_series), 1), tf.float32)
 compare = tf.cast(tf.equal(tf.cast(batch_y, tf.float32), probs_x), tf.float32)
 accuracy = tf.div(tf.reduce_sum(compare), batch_size, "Accuracy")
-#fpr, tpr, thresholds = roc_curve(batch_y, probs_x, pos_label=1)
-#auc = auc(fpr, tpr)
 
 ### training
 train_step = tf.train.AdagradOptimizer(learning_rate).minimize(total_loss)
@@ -110,14 +118,17 @@ with tf.Session() as sess:
     for batch_pos in range(0, n_data, batch_size):
       data_batch = data_train[batch_pos:batch_pos + batch_size]
       labels_batch = y_train[batch_pos:batch_pos + batch_size].flatten()
-      sanity_check(data_batch) # checks for nan values
+      #sanity_check(data_batch) # checks for nan values
 
-      _total_loss, _f_cost, _train_step, h_init = sess.run([total_loss, f_cost, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
-      print("Epoch: {}, Batch: {}, Loss: {}, Cost: {}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss, _f_cost))
+      _total_loss, _, _f_cost, _train_step, h_init = sess.run([total_loss, h_max, f_cost, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
+      print("Epoch: {:2d}, Batch: {:2d}, Loss: {}, Cost: {}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss, _f_cost))
+
       loss_list.append(_total_loss)
+      #print("h_max:{}".format(h_max.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("probs_x:{}".format(probs_x.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("labels :{}".format(labels_batch))
-
+      #with open("hs.txt", "a") as f:
+      #  f.write("Epoch: {}, Batch: {}\n{}\n".format(epoch_idx +1 , batch_pos // batch_size + 1, h_max)) #.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
 #      if batch_pos  == n_data - batch_size: # plot at the end of the epoch
 #        plt.plot(loss_list)
 
