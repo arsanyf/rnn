@@ -22,7 +22,7 @@ data  = np.load("data.npy")
 labels= np.load("labels.npy")
 
 ## cross validation prep
-data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=5)
+data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=5, shuffle=True)
 
 ## hyperparams
 n_epochs = 50
