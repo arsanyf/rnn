@@ -18,8 +18,8 @@ def sanity_check(data):
         assert not math.isnan(h)
 
 ## load data
-data  = np.load("data.npy") 
-labels= np.load("labels.npy")
+data  = np.load("data_lin.npy") 
+labels= np.load("labels_lin.npy")
 
 ## cross validation prep
 data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=5, shuffle=True)
@@ -34,6 +34,7 @@ n_data = len(data_train)		#n
 n_seq = data_train.shape[1]		#t: time steps
 n_syscall = data_train.shape[2]		#h: system call and args per time step
 lambda_a = 0.001 # lambda attention model
+c = 1 # assuming unified cost for feature acquisition
 
 ## model params
 initializer = tf.random_uniform_initializer(0,1)
@@ -55,19 +56,18 @@ a_t = tf.get_variable("a_t", shape=[batch_size, n_syscall], initializer=initiali
 layers_h = []
 layers_ha= []
 attention_vector = [] 
-feature_cost = np.ones((batch_size, n_seq), dtype=np.float32)
+feature_cost = np.full((1, n_seq), c, dtype=np.float32)
 h_prev = h0
 
 input_filtered = []
 ###attention layer
-#h_t=None
 for i in range(n_seq):
   x_t = batch_x[:,i,:] #nxh
 
   h_t = tf.sigmoid( tf.matmul(h_prev, W_hh) + tf.matmul(x_t, W_ih) )
   layers_h.append(h_t)
 
-  a_t = tf.norm(tf.sigmoid(tf.matmul(h_prev, W_a)), axis=1, keep_dims=True) #nxh
+  a_t = tf.norm(tf.sigmoid(tf.matmul(h_prev, W_a)), axis=0) #nxh
   attention_vector.append(a_t)
   g_t = tf.multiply(a_t, x_t) # Hadamard Product (only when training)
   input_filtered.append(g_t)
@@ -83,7 +83,8 @@ h_max = tf.nn.max_pool(tf.reshape(hs, [n_syscall, batch_size, n_seq, 1]), [1, 1,
 h_max = tf.transpose(tf.reshape(h_max, [n_syscall, batch_size]))
 
 ### loss calculation
-f_cost = lambda_a * tf.reduce_sum(tf.matmul(feature_cost, tf.reshape(tf.convert_to_tensor(attention_vector), [n_seq, batch_size] )))
+attention_vector = tf.reshape(tf.convert_to_tensor(attention_vector), [n_seq, 1])
+f_cost = lambda_a * tf.reduce_sum(tf.matmul(feature_cost, attention_vector))
 
 ### loss calculation
 logits_series = tf.matmul(h_max, W_ho) + b_o + f_cost + epsilon
@@ -106,6 +107,8 @@ loss_list = []
 with tf.Session() as sess:
   sess.run(tf.global_variables_initializer())
 
+  avp = []
+
   for epoch_idx in range(n_epochs):
   ## run epoch
 #    plt.ion()
@@ -119,10 +122,11 @@ with tf.Session() as sess:
       labels_batch = y_train[batch_pos:batch_pos + batch_size].flatten()
       #sanity_check(data_batch) # checks for nan values
 
-      _total_loss, _f_cost, _train_step, h_init, _, _, _, _ = sess.run([total_loss, f_cost, train_step, h_t, a_t, g_t, ha_t, h_max], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
+      _total_loss, _f_cost, _train_step, h_init, _a_t, _, _attention_vector, _, _ = sess.run([total_loss, f_cost, train_step, h_t, a_t, g_t, attention_vector, ha_t, h_max], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
       print("Epoch: {:2d}, Batch: {:2d}, Loss: {}, Cost: {}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss, _f_cost))
 
       loss_list.append(_total_loss)
+      avp.append(_attention_vector)
       #print("h_max:{}".format(h_max.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("probs_x:{}".format(probs_x.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("labels :{}".format(labels_batch))
@@ -132,7 +136,8 @@ with tf.Session() as sess:
 #      if batch_pos  == n_data - batch_size: # plot at the end of the epoch
 #        plt.plot(loss_list)
 
-    ## validation
+  #np.save("attention_vector/c1", avp)
+  ## validation
   _, v_loss, v_probs_x, v_acc = sess.run([h_t, total_loss, probs_x, accuracy], feed_dict={batch_x:data_test, batch_y:y_test.flatten(), h0:h_init})
 
   fpr, tpr, thresholds = roc_curve(y_test.flatten(), v_probs_x, pos_label=1)
