@@ -115,7 +115,7 @@ with tf.Session(config=cfg) as sess:
       labels_batch = y_train[batch_pos:batch_pos + batch_size].flatten()
       #sanity_check(data_batch) # checks for nan values
       _total_loss, _f_cost, _train_step, h_init, _a_t, _, _attention_vector_norm, _, _ = sess.run([total_loss, f_cost, train_step, h_t, a_t, g_t, attention_vector_norm, ha_t, h_max], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
-      print("Epoch: {:2d}, Batch: {:2d}, Loss: {}, Cost: {}, ||a_t||: {}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss, _f_cost,_attention_vector_norm))
+      print("Epoch: {:2d}, Batch: {:2d}, Loss: {:.2}, Cost: {:.2f}, ||a_t||: {}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss, _f_cost,_attention_vector_norm))
 
       loss_list.append(_total_loss)
       avp.append(_attention_vector_norm)
@@ -134,10 +134,11 @@ with tf.Session(config=cfg) as sess:
 
   fpr, tpr, thresholds = roc_curve(y_test.flatten(), v_probs_x, pos_label=1)
   v_auc = auc(fpr, tpr)
-  plt.plot(fpr, tpr, label="AUC={}\nFeature Cost={}\nLoss={}\nAccuracy={}%".format(v_auc, c, v_loss, v_acc*100))
+  plt.plot(fpr, tpr, label="AUC={:.2f}\nFeature Cost={}\nLoss={:.2f}\nAccuracy={:.2f}%".format(v_auc, c, v_loss, v_acc*100))
   plt.legend(loc="lower right")
   plt.savefig("plots/{}.png".format(v_auc))
+  np.save("npyplots/{}_{:.2f}_{:.2f}_{:.2f}".format(c, v_auc, v_loss, v_acc), [fpr, tpr])
 
-  print("Validation>> Loss:{}, Accuracy: {}%, FPR: {}, TPR: {}, AUC: {}".format(v_loss, v_acc*100, fpr, tpr, v_auc))
+  print("Validation>> Loss:{:.2f}, Accuracy: {:.2f}%, FPR: {}, TPR: {}, AUC: {:.2f}".format(v_loss, v_acc*100, fpr, tpr, v_auc))
   #G_writer = tf.summary.FileWriter('arsany/graph', sess.graph)
 
