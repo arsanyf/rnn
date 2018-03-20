@@ -2,7 +2,7 @@
 # Adapted from https://medium.com/@erikhallstrm/hello-world-rnn-83cd7105b767
 #
 
-
+import sys
 from os import path
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -16,14 +16,20 @@ def sanity_check(data):
     for t in n:
       for h in t:
         assert not math.isnan(h)
+
+if len(sys.argv) != 4:
+  print("Usage: <data.npy> <labels.npy> <batch_size>")
+  sys.exit()
+
 ## load data
-data  = np.load("data_win3.npy") 
-labels= np.load("labels_win3.npy")
+data  = np.load(sys.argv[1]) 
+labels= np.load(sys.argv[2])
+_batch_size = int(sys.argv[3])
 ## cross validation prep
-data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=11, shuffle=True)
+data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=_batch_size, shuffle=True)
 ## hyperparams
 n_epochs = 10
-batch_size = 11
+batch_size = _batch_size
 num_classes = 2
 learning_rate = 0.001
 epsilon = 10**-8
