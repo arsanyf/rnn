@@ -2,11 +2,11 @@
 # Adapted from https://medium.com/@erikhallstrm/hello-world-rnn-83cd7105b767
 #
 
-
+import sys
 from os import path
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc, precision_recall_fscore_support
 import tensorflow as tf
 import math
 import matplotlib.pyplot as plt
@@ -17,16 +17,21 @@ def sanity_check(data):
       for h in t:
         assert not math.isnan(h)
 
+if len(sys.argv) != 4:
+  print("Usage: <data.npy> <labels.npy> <batch_size>")
+  sys.exit()
+
 ## load data
-data  = np.load("data_win3.npy") 
-labels= np.load("labels_win3.npy")
+data   = np.load(sys.argv[1])
+labels = np.load(sys.argv[2])
+_batch_size = int(sys.argv[3])
 
 ## cross validation prep
-data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=11, shuffle=True)
+data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=_batch_size)
 
 ## hyperparams
 n_epochs = 50
-batch_size = 11
+batch_size = _batch_size
 num_classes = 2
 learning_rate = 0.001
 epsilon = 10**-8
@@ -57,8 +62,8 @@ for i in range(n_seq):
   layers_h.append(h_t)
   h_prev = h_t
 
-  z_t = tf.nn.softmax(tf.matmul(h_t, W_ho) + b_o)
-  dzdx = tf.reduce_mean(tf.norm(tf.gradients(z_t, x_t)))
+  #z_t = tf.nn.softmax(tf.matmul(h_t, W_ho) + b_o)
+  #dzdx = tf.reduce_mean(tf.norm(tf.gradients(z_t, x_t)))
 
 ### maxpooling
 hs = tf.transpose(tf.convert_to_tensor(layers_h, dtype=tf.float32))
@@ -94,8 +99,8 @@ with tf.Session() as sess:
       labels_batch = y_train[batch_pos:batch_pos + batch_size].flatten()
       #sanity_check(data_batch) # checks for nan values
 
-      _total_loss, _, _train_step, h_init, _dzdx = sess.run([total_loss, h_max, train_step, h_t, dzdx], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
-      print("Epoch: {:2d}, Batch: {:2d}, Loss: {:.2f}, dzdx={}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss, _dzdx))
+      _total_loss, _, _train_step, h_init = sess.run([total_loss, h_max, train_step, h_t], feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})
+      print("Epoch: {:2d}, Batch: {:2d}, Loss: {}".format(epoch_idx+1, batch_pos // batch_size + 1, _total_loss))
       loss_list.append(_total_loss)
       #print("h_max:{}".format(h_max.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
       #print("probs_x:{}".format(probs_x.eval(feed_dict={batch_x:data_batch, batch_y:labels_batch, h0:h_init})))
@@ -108,12 +113,15 @@ with tf.Session() as sess:
     ## validation
   _, v_loss, v_probs_x, v_acc = sess.run([h_t, total_loss, probs_x, accuracy], feed_dict={batch_x:data_test, batch_y:y_test.flatten(), h0:h_init})
 
+  precision, recall, _, _ = precision_recall_fscore_support(y_test.flatten(), v_probs_x, average="binary", pos_label=1)
   fpr, tpr, thresholds = roc_curve(y_test.flatten(), v_probs_x, pos_label=1)
   v_auc = auc(fpr, tpr)
   plt.plot(fpr, tpr, label="AUC={:.2f}\nLoss={:.2f}\nAccuracy={:.2f}%".format(v_auc, v_loss, v_acc*100))
   plt.legend(loc="lower right")
   plt.savefig("plots/{}.png".format(v_auc))
-  print("Validation>> Loss:{:.2f}, Accuracy: {:.2f}%, FPR: {}, TPR: {}, AUC: {:.2f}".format(v_loss, v_acc*100, fpr, tpr, v_auc))
+  np.save("npyplots/{:.2f}_{:.2f}_{:.2f}_{:.2f}_{:.2f}".format(v_auc, v_loss, v_acc, precision*100, recall*100), [fpr, tpr])
+
+  print("Validation>> Loss:{}, Accuracy: {:.2f}%, AUC: {:.2f}, Precision:{:.2f}%, Recall: {:.2f}%".format(v_loss, v_acc*100, v_auc, precision*100, recall*100))
 
   #G_writer = tf.summary.FileWriter('arsany/graph', sess.graph)
 
