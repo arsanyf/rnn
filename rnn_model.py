@@ -6,7 +6,7 @@ import sys
 from os import path
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc, precision_recall_fscore_support
 import tensorflow as tf
 import math
 import matplotlib.pyplot as plt
@@ -26,7 +26,7 @@ data  = np.load(sys.argv[1])
 labels= np.load(sys.argv[2])
 _batch_size = int(sys.argv[3])
 ## cross validation prep
-data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=_batch_size, shuffle=True)
+data_train, data_test, y_train, y_test = train_test_split(data, labels, test_size=_batch_size, shuffle=False)
 ## hyperparams
 n_epochs = 10
 batch_size = _batch_size
@@ -75,7 +75,7 @@ for i in range(n_seq):
   g_t = tf.multiply(x_t, tf.transpose(a_t)) # Hadamard Product (only when training)
   #input_filtered.append(g_t)
 
-  ha_t = tf.tanh( tf.matmul(h_prev, W_hh) + tf.matmul(g_t, W_u) )
+  ha_t = tf.sigmoid( tf.matmul(h_prev, W_hh) + tf.matmul(g_t, W_u) )
   layers_ha.append(ha_t)
 
   h_prev = h_t
@@ -138,13 +138,14 @@ with tf.Session(config=cfg) as sess:
   ## validation
   _, v_loss, v_probs_x, v_acc = sess.run([h_t, total_loss, probs_x, accuracy], feed_dict={batch_x:data_test, batch_y:y_test.flatten(), h0:h_init})
 
+  precision, recall, _, _ = precision_recall_fscore_support(y_test.flatten(), v_probs_x, average="binary", pos_label=1)
   fpr, tpr, thresholds = roc_curve(y_test.flatten(), v_probs_x, pos_label=1)
   v_auc = auc(fpr, tpr)
   plt.plot(fpr, tpr, label="AUC={:.2f}\nFeature Cost={}\nLoss={:.2f}\nAccuracy={:.2f}%".format(v_auc, c, v_loss, v_acc*100))
   plt.legend(loc="lower right")
   plt.savefig("plots/{}.png".format(v_auc))
-  np.save("npyplots/{}_{:.2f}_{:.2f}_{:.2f}".format(c, v_auc, v_loss, v_acc), [fpr, tpr])
+  np.save("npyplots/{}_{:.2f}_{:.2f}_{:.2f}_{:.2f}_{:.2f}".format(c, v_auc, v_loss, v_acc, precision*100, recall*100), [fpr, tpr])
 
-  print("Validation>> Loss:{:.2f}, Accuracy: {:.2f}%, FPR: {}, TPR: {}, AUC: {:.2f}".format(v_loss, v_acc*100, fpr, tpr, v_auc))
+  print("Validation>> Loss:{:.2f}, Accuracy: {:.2f}%, AUC: {:.2f}, Precision:{:.2f}%, Recall:{:.2f}%".format(v_loss, v_acc*100, v_auc, precision*100, recall*100))
   #G_writer = tf.summary.FileWriter('arsany/graph', sess.graph)
 
