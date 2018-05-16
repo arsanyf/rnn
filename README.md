@@ -1,17 +1,21 @@
-## Datasets
+# Datasets
 
-# Windows
+## Windows
+Undersampled, dimensions are 44x250x596
+Reccommended batch size is 11
 ```
-/local_home/awad/dataset/dataset_win_shuffled/undersampling/shuffles/data1.npy
-/local_home/awad/dataset/dataset_win_all/undersampling/shuffles/labels1.npy
+/local_home/awad/dataset/dataset_win_shuffled/data1.npy
+/local_home/awad/dataset/dataset_win_shuffled/labels1.npy
 
-/local_home/awad/dataset/dataset_win_shuffled/undersampling/shuffles/data2.npy
-/local_home/awad/dataset/dataset_win_all/undersampling/shuffles/labels2.npy
+/local_home/awad/dataset/dataset_win_shuffled/data2.npy
+/local_home/awad/dataset/dataset_win_shuffled/labels2.npy
 
-/local_home/awad/dataset/dataset_win_shuffled/undersampling/shuffles/data3.npy
-/local_home/awad/dataset/dataset_win_all/undersampling/shuffles/labels3.npy
+/local_home/awad/dataset/dataset_win_shuffled/data3.npy
+/local_home/awad/dataset/dataset_win_shuffled/labels3.npy
 ```
-# Linux
+## Linux
+Undersampled, dimensions are 90x250x671
+Reccommended batch size is 10
 ```
 /local_home/awad/dataset/dataset_lin_shuffled/d_1.npy
 /local_home/awad/dataset/dataset_lin_shuffled/l_1.npy
