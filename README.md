@@ -5,7 +5,7 @@ Datasets are grouped in the `/home/awad/dataset` directory. This includes the fi
 /home/awad/dataset
 |
 └─── backups/
-└─── dataset_lin_all/	                    OHE Linux dataset
+└─── dataset_lin_all/	                  OHE Linux dataset
 └─── dataset_lin_shuffled/                Final Linux datasets, used for training
 └─── dataset_win_all/                     Preprocessing of Windows dataset
 └─── dataset_win_benign/                  Benign Windows traces
@@ -17,7 +17,6 @@ Datasets are grouped in the `/home/awad/dataset` directory. This includes the fi
 └─── prep_lin_all/                        Preprocessing of Linux dataset
 └─── prep_lin_benign/                     Dataprep of Linux Benign dataset
 └─── prep_win_mw/                         Dataprep of Windows Malware traces
-
 |
 ```
 
@@ -31,6 +30,7 @@ Linux benign traces are retrieved via Elasticsearch based on <VMID, PID> pair. O
 └─── ohe_dataset_benign/        Benign traces grouped by <VMID, PID>
 |    | ohe_labels_benign.npy    (65,)
 |    | prepdataohe.py           Group benign samples into one npy array, zero padded
+|
 ```
 
 ## Windows Malware
@@ -48,6 +48,93 @@ First step is to run `prepdataohe_mw.py` script to generate `traces_win_mw_ohe.n
 ```
 
 # Preprocessing
+In preprocessing, we do three main things
+1.  Group benign and malware samples into one <dataset, labels> pair
+2.  Oversample or Undersample 
+3.  Shuffle
+
+## Scripts
+Scripts to perform these actions are in the following directory.
+```
+oversample_undersample_and_shuffle/
+|    | oversample.py
+|    | shuffle.py
+|    | undersample.py
+|
+```
+
+## Windows dataset
+The result of dataprep is a numpy pair for malware data and another one for benign data. This is true for both Windows and Linux. First step here is to regroup those using the `datasetwinregroup.py` script. Then the result undergoes oversampling and undersampling, both having their own directories. After that, we shuffle, the result is stored in `oversampling/shuffles` and `undersampling/shuffles`. Each shuffle has been trained, at the end 3 shuffles were selected and copied over to the `~/dataset/dataset_win_shuffled` to be used for the experiments 1 and 2.
+
+A special case in Windows dataset is to remove side information, this is why we use the `subseq.py` script to trim the third dimension and remove side information from it. However, no need to reuse it the Windows benign data is save at `~/dataset/dataset_win_benign/win_benign_traces_noparams.npy` and `~/dataset/dataset_win_benign/win_benign_labels_noparams.npy`.
+
+```
+└─── ~/dataset/dataset_win_all/
+|    | data2.npy
+|    | data3.npy
+|    | data.npy
+|    | data_ros.npy
+|    | datasetwinregroup.py           Regroup windows dataset malware and benign
+|    | labels3.npy
+|    | labels.npy
+|    | labels_ros.npy
+└───  oversampling/
+|    | data_oversampled_ros.npy       Oversampled data using Random Oversampling (ros)
+|    | labels_oversampled_ros.npy
+|    | shuffle.py                     shuffle script copied over from `oversample_undersample_and_shuffle`
+|    └───  shuffles/                  Directory containing multiple shuffles, all can be used for training
+|    | subseq.py                      Script to cut elements from the third dimension.
+|
+└───  undersampling/
+|    | data_undersampled_nm.npy       Undersampled data using Near Miss
+|    | data_undersampled_rus.npy      Undersampled data using Random Undersampling (rus)
+|    | labels_undersampled_nm.npy
+|    | labels_undersampled_rus.npy
+|    └─── shuffles/                   Directory containing multiple shuffles, all can be used for training
+|
+```
+
+## Linux dataset
+The result of oversampling and undersampling is stored in the following directory.
+```
+└─── ~/dataset/dataset_lin_shuffled/
+|    └─── allargs/              (90, 250, 2188)
+|    | d_1.npy                  (90, 250, 671)
+|    | d_2.npy
+|    | d_3.npy
+|    | d_3.npy.1
+|    | d_3_oversampled.npy
+|    | l_1.npy
+|    | l_2.npy
+|    | l_3.npy
+|    | l_3_oversampled.npy
+|
+```
+To be able to run this, we exclude the first argument. As a backup, d_1, d_2, and d_3 containing arg1 have been stored in `allargs`. Notice the dimensions above.
+
+The oversampling and undersampling are performed and stored in `~/dataset/prep_lin_all`. To create more benign samples, more benign tracing was conducted. Before that, the Linux dataset contained 73 malware samples and 2 benign samples, these are stored as a backup in `dataset_73_2`. Same as with Windows, the oversampled and undersampled results are stored in their respective directories, which then undergoes shuffling. 
+
+```
+└─── ~/dataset/prep_lin_all/
+|    | data_regroup.py
+|    └─── dataset_73_2/
+|    | lin_cropped.npy          (171, 250, 2188) Oversampled, cropped to 250m arg1 included
+|    | lin_labels_cropped.npy
+|    | ohe_data_lin.npy         (171, 2463, 2188) Oversampled, arg1 included
+|    | ohe_data.npy             (75, 83, 1011) Dataset with 73 malware and 2 benign samples
+|    └─── ohe_dataset/
+|    | ohe_labels_lin.npy
+|    | ohe_labels.npy
+|    └─── outdated/
+|    └─── oversample/
+|    | prepdataohe.py
+|    | sd.py
+|    | trace_dim.txt
+|    └─── undersample/
+```
+
+### Exclusion of arg1
+No script is provided for this. To exclude arg1, remove columns with indices `46` to `1563`.
 
 
 # Final Datasets
